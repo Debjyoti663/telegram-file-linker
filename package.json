@@ -1,7 +1,7 @@
 {
-  "name": "telegram-file-linker",
+  "name": "mpd-direct-downloader",
   "version": "1.0.0",
-  "description": "Telegram File to Direct Link Bot",
+  "description": "MPD to Direct MP4 Link Generator",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,6 +9,6 @@
   "dependencies": {
     "node-telegram-bot-api": "^0.66.0",
     "express": "^4.19.2",
-    "axios": "^1.7.2"
+    "ffmpeg-static": "^5.2.0"
   }
 }
