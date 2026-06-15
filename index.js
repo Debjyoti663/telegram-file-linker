@@ -1,67 +1,67 @@
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
-const axios = require('axios');
+const { exec } = require('child_process');
+const ffmpegPath = require('ffmpeg-static');
+const fs = require('fs');
+const path = require('path');
 
-// ======================================================================
-// ⚠️ ১. আপনার আসল টেলিগ্রাম বট টোকেনটি নিচের কোটেশনের (' ') ভেতরে বসান
+// ⚠️ ১. আপনার টেলিগ্রাম বট টোকেন বসান
 const token = '8626568842:AAEpCRNsK2H-t6vEtkYwJiYVY2KOCaX2R1M';
 const bot = new TelegramBot(token, { polling: true });
 
 const app = express();
+const downloadsDir = path.join(__dirname, 'downloads');
 
-// ⚠️ ২. আপনার রেন্ডার伺服ার (Render Server) এর লিংকটি এখানে বসান
-const SERVER_URL = process.env.SERVER_URL || 'https://telegram-file-linker.onrender.com'; 
+// ডাউনলোড ফোল্ডার না থাকলে তৈরি করবে
+if (!fs.existsSync(downloadsDir)) {
+    fs.mkdirSync(downloadsDir);
+}
 
-// ⚠️ ৩. আপনার ExoClick VAST Ad লিংকটি এখানে দেওয়া আছে
-const VIDEO_AD_URL = 'https://s.magsrv.com/v1/vast.php?idz=5948080';
-// ======================================================================
+// রেন্ডার সার্ভারের লিংক এনভায়রনমেন্ট ভ্যারিয়েবল থেকে নেবে
+const SERVER_URL = process.env.SERVER_URL || 'https://telegram-file-linker.onrender.com';
+
+// ডাউনলোড করা ফাইলগুলো ইন্টারনেটে এক্সেস করার জন্য স্ট্যাটিক ফোল্ডার সেটআপ
+app.use('/download', express.static(downloadsDir));
 
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
+    const text = msg.text;
 
-    if (msg.video || msg.document) {
-        const fileId = msg.video ? msg.video.file_id : msg.document.file_id;
-        
-        // 🎯 এখানে বড় ফাইলের এরর হ্যান্ডলারটি পার্মানেন্টলি বসিয়ে দেওয়া হয়েছে
-        bot.getFile(fileId).then((file) => {
-            const filePath = file.file_path;
-            const directLink = `${SERVER_URL}/file/${filePath}`;
-            
-            bot.sendMessage(chatId, `🎯 আপনার ভিডিওর স্থায়ী ডাইরেক্ট লিংক (With ExoClick Ads):\n\n${directLink}\n\n(এই লিংকটি সরাসরি ওটিটি অ্যাপের প্লেয়ারে বসিয়ে দিন)`);
-        }).catch((err) => {
-            // যদি ভিডিওর সাইজ ২০ মেগাবাইটের বেশি হয়, বট ক্র্যাশ না করে এই মেসেজটি দেবে
-            bot.sendMessage(chatId, `⚠️ ভাই, এই ভিডিওর সাইজ অনেক বড় (২০ এমবির বেশি)!\n\nটেলিগ্রাম বটের ফ্রি লিমিটের কারণে সরাসরি এত বড় ফাইল পাঠানো যাবে না।\n\n💡 সমাধান: টেস্ট করার জন্য প্রথমে ৫-১০ এমবির একটি ছোট ভিডিও পাঠান। আর বড় ভিডিওর জন্য ওটিকে .zip ফাইল বানিয়ে বটে আপলোড করুন, তাহলে লিংক চলে আসবে।`);
+    if (!text) return;
+
+    if (text === '/start') {
+        return bot.sendMessage(chatId, 'ভাই, আমাকে একটি .mpd লিংক দিন। আমি ওটিকে সরাসরি .mp4 ডাউনলোড লিংকে কনভার্ট করে দেব।');
+    }
+
+    // লিংক চেক
+    if (text.includes('.mpd') || text.includes('.m3u8')) {
+        bot.sendMessage(chatId, '🔄 লিংক প্রসেস হচ্ছে... সার্ভারে ভিডিও ডাউনলোড এবং কনভার্ট করা শুরু হয়েছে। কিছুটা সময় লাগতে পারে ভাই, অপেক্ষা করুন।');
+
+        const fileId = `video_${Date.now()}.mp4`;
+        const outputPath = path.join(downloadsDir, fileId);
+
+        // FFmpeg কমান্ড (ভিডিও এবং অডিও স্ট্রিম জোড়া দিয়ে mp4 বানাবে)
+        // নোট: যদি ভিডিওতে ClearKey বা Widevine DRM থাকে, তবে নিচে -c copy এর আগে ডিক্রিপশন কী কমান্ড পাস করতে হবে
+        const ffmpegCommand = `"${ffmpegPath}" -i "${text}" -c copy -bsf:a aac_adtstoasc "${outputPath}"`;
+
+        exec(ffmpegCommand, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`FFmpeg Error: ${error.message}`);
+                return bot.sendMessage(chatId, `❌ দুঃখিত ভাই! ভিডিওটি প্রসেস করা যায়নি। সার্ভার এরর: ${error.message}`);
+            }
+
+            // ডাউনলোড করার ডাইরেক্ট ইউআরএল জেনারেট
+            const directDownloadLink = `${SERVER_URL}/download/${fileId}`;
+
+            bot.sendMessage(chatId, `🎯 আপনার ফাইল রেডি! নিচে সরাসরি .mp4 ডাউনলোড লিংক দেওয়া হলো:\n\n${directDownloadLink}\n\n💡 নোট: এই লিংকে ক্লিক করলেই ডাউনলোড শুরু হবে। সার্ভারের স্পেস খালি রাখতে ২৪ ঘণ্টা পর ফাইলটি অটো ডিলিট হয়ে যেতে পারে।`);
         });
     } else {
-        bot.sendMessage(chatId, 'ভাই, আমাকে একটি ভিডিও বা ফাইল ফরওয়ার্ড করুন, আমি অ্যাড-সহ লিংক তৈরি করে দিচ্ছি।');
+        bot.sendMessage(chatId, 'ভাই, দয়া করে একটি সঠিক .mpd বা .m3u8 লিংক পাঠান।');
     }
 });
 
-// ভিডিও এবং অ্যাড স্ক্রিপ্ট একসাথে প্লেয়ারে পাস করার মেইন পাইপলাইন
-app.get('/file/*', async (req, res) => {
-    const telegramFilePath = req.params[0];
-    const telegramFileUrl = `https://api.telegram.org/file/bot${token}/${telegramFilePath}`;
-
-    try {
-        res.setHeader('Content-Type', 'video/mp4');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Expose-Headers', 'X-Video-Ad-Tag');
-        res.setHeader('X-Video-Ad-Tag', VIDEO_AD_URL);
-
-        const response = await axios({
-            method: 'get',
-            url: telegramFileUrl,
-            responseType: 'stream'
-        });
-
-        response.data.pipe(res);
-    } catch (error) {
-        console.error('Streaming error:', error.message);
-        res.status(500).send('Error streaming file');
-    }
-});
-
+// সার্ভার পোর্ট সেটিংস
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {
-    console.log(`Secure Ad-Server is running on port ${PORT}`);
+    console.log(`MPD Downloader Server is running on port ${PORT}`);
 });
