@@ -9,7 +9,7 @@ const bot = new TelegramBot(token, { polling: true });
 const app = express();
 
 // কুইব (Koyeb) সার্ভারের ইউআরএল
-const SERVER_URL = process.env.SERVER_URL || 'https://your-koyeb-app.koyeb.app'; 
+const SERVER_URL = process.env.SERVER_URL || 'https://telegram-file-linker.onrender.com'; 
 
 // ⚠️ আপনার ExoClick বা AdMaven থেকে পাওয়া VAST Ad XML লিংকটি এখানে বসান
 // যদি অ্যাড নেটওয়ার্ক এখনো না থাকে, তবে এই ডেমো লিংকটিই রেখে দিন টেস্ট করার জন্য
