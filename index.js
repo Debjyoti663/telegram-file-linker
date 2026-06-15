@@ -9,10 +9,10 @@ const bot = new TelegramBot(token, { polling: true });
 
 const app = express();
 
-// ⚠️ ২. আপনার রেন্ডার সার্ভারের পুরো লিংকটি নিচের কোটেশনের (' ') ভেতরে বসান
+// ⚠️ ২. আপনার রেন্ডার伺服ার (Render Server) এর লিংকটি এখানে বসান
 const SERVER_URL = process.env.SERVER_URL || 'https://telegram-file-linker.onrender.com'; 
 
-// ⚠️ ৩. আপনার ExoClick VAST Ad লিংকটি এখানে পার্মানেন্ট সেট করা আছে, এটা হাত দেওয়ার দরকার নেই
+// ⚠️ ৩. আপনার ExoClick VAST Ad লিংকটি এখানে দেওয়া আছে
 const VIDEO_AD_URL = 'https://s.magsrv.com/v1/vast.php?idz=5948080';
 // ======================================================================
 
@@ -22,13 +22,15 @@ bot.on('message', async (msg) => {
     if (msg.video || msg.document) {
         const fileId = msg.video ? msg.video.file_id : msg.document.file_id;
         
+        // 🎯 এখানে বড় ফাইলের এরর হ্যান্ডলারটি পার্মানেন্টলি বসিয়ে দেওয়া হয়েছে
         bot.getFile(fileId).then((file) => {
             const filePath = file.file_path;
-            
-            // বট যে লিংকটি দেবে, সেটির সাথে বিজ্ঞপ্তির ট্যাগ যুক্ত করে দেওয়া হচ্ছে
             const directLink = `${SERVER_URL}/file/${filePath}`;
             
             bot.sendMessage(chatId, `🎯 আপনার ভিডিওর স্থায়ী ডাইরেক্ট লিংক (With ExoClick Ads):\n\n${directLink}\n\n(এই লিংকটি সরাসরি ওটিটি অ্যাপের প্লেয়ারে বসিয়ে দিন)`);
+        }).catch((err) => {
+            // যদি ভিডিওর সাইজ ২০ মেগাবাইটের বেশি হয়, বট ক্র্যাশ না করে এই মেসেজটি দেবে
+            bot.sendMessage(chatId, `⚠️ ভাই, এই ভিডিওর সাইজ অনেক বড় (২০ এমবির বেশি)!\n\nটেলিগ্রাম বটের ফ্রি লিমিটের কারণে সরাসরি এত বড় ফাইল পাঠানো যাবে না।\n\n💡 সমাধান: টেস্ট করার জন্য প্রথমে ৫-১০ এমবির একটি ছোট ভিডিও পাঠান। আর বড় ভিডিওর জন্য ওটিকে .zip ফাইল বানিয়ে বটে আপলোড করুন, তাহলে লিংক চলে আসবে।`);
         });
     } else {
         bot.sendMessage(chatId, 'ভাই, আমাকে একটি ভিডিও বা ফাইল ফরওয়ার্ড করুন, আমি অ্যাড-সহ লিংক তৈরি করে দিচ্ছি।');
@@ -41,11 +43,10 @@ app.get('/file/*', async (req, res) => {
     const telegramFileUrl = `https://api.telegram.org/file/bot${token}/${telegramFilePath}`;
 
     try {
-        // প্লেয়ার রিড করার জন্য হেডার এবং এক্সোক্লিক অ্যাড কোড ইনজেক্ট করা হচ্ছে
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Expose-Headers', 'X-Video-Ad-Tag');
-        res.setHeader('X-Video-Ad-Tag', VIDEO_AD_URL); // অ্যাপের প্লেয়ার এই হেডার থেকে অ্যাড রিসিভ করবে
+        res.setHeader('X-Video-Ad-Tag', VIDEO_AD_URL);
 
         const response = await axios({
             method: 'get',
